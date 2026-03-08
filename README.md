@@ -1,47 +1,89 @@
-# tt - TickTick CLI
+<div align="center">
 
-A Go CLI binary for managing TickTick tasks from the terminal.
+# tt
+
+**A fast, minimal CLI for [TickTick](https://ticktick.com) — built in Go.**
+
+Add tasks, manage projects, and check off your day without leaving the terminal.
+
+[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+
+</div>
+
+---
+
+## Features
+
+- ✅ Full task CRUD — list, add, edit, complete, delete
+- 📁 Project management
+- 🗓 Natural language due dates (`tomorrow 3pm`, `next monday`, `in 2 days`)
+- 🔺 Priority support (`low`, `medium`, `high`)
+- 📤 JSON output for scripting
+- 🔐 OAuth2 auth via TickTick Open API
+
+---
 
 ## Installation
 
+**From source:**
+
 ```bash
-make install
+git clone https://github.com/dhruvkelawala/tt
+cd tt
+make install   # builds and copies to ~/.local/bin/tt
 ```
 
-This installs `tt` to `~/.local/bin/tt`.
+Make sure `~/.local/bin` is on your `$PATH`:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+```
+
+---
+
+## Setup
+
+1. Register an app at [developer.ticktick.com](https://developer.ticktick.com/manage) to get your **Client ID** and **Client Secret**.
+
+2. Create `~/.config/tt/config.json`:
+
+```json
+{
+  "client_id": "YOUR_CLIENT_ID",
+  "client_secret": "YOUR_CLIENT_SECRET",
+  "timezone": "Europe/London"
+}
+```
+
+3. Authenticate:
+
+```bash
+tt auth login
+```
+
+This opens a browser for OAuth2 and stores your token at `~/.config/tt/token.json`.
+
+---
 
 ## Usage
-
-### Authentication
-
-```bash
-tt auth login        # OAuth2 browser flow
-tt auth status       # Show auth status
-tt auth logout       # Delete stored token
-```
 
 ### Tasks
 
 ```bash
-# List tasks (inbox by default)
-tt task list
-tt task list --project "Work"
-tt task list --all
-tt task list --due today
-tt task list --priority high
+tt task list                          # Inbox (default)
+tt task list --all                    # All tasks
+tt task list --project "Work"         # By project
+tt task list --due today              # Due today
+tt task list --priority high          # By priority
+tt task list --json                   # JSON output
 
-# Add task
 tt task add "Buy milk"
-tt task add "Deploy app" --project "Work" --priority high --due "tomorrow 3pm"
+tt task add "Ship feature" --project "Work" --priority high --due "tomorrow 9am"
 
-# Task details
-tt task get <id>
-
-# Complete/delete
-tt task done <id>
-tt task delete <id>
-
-# Edit task
+tt task get <id>                      # Task details
+tt task done <id>                     # Mark complete
+tt task delete <id>                   # Delete
 tt task edit <id> --title "New title" --priority medium
 ```
 
@@ -52,38 +94,35 @@ tt project list
 tt project get <id>
 ```
 
-### Quick Add
+### JSON / scripting
+
+Any command accepts `--json` / `-j`:
 
 ```bash
-tt "Buy milk" --project Work --priority high --due tomorrow
+tt task list --json | jq '.[].title'
 ```
 
-### JSON Output
+---
 
-Add `--json` or `-j` flag to any command for JSON output.
+## Due Date Formats
 
-## Configuration
+| Input | Meaning |
+|-------|---------|
+| `today`, `tomorrow` | Midnight of that day |
+| `next monday` | Following Monday |
+| `3pm`, `tomorrow 3pm` | Specific time |
+| `in 2 days`, `in 3 hours` | Relative offset |
+| `2026-03-20` | ISO date |
+| `2026-03-20T15:00:00` | ISO datetime |
 
-Register your app at [developer.ticktick.com](https://developer.ticktick.com/manage) to get a client ID and secret.
+---
 
-Config is stored at `~/.config/tt/config.json`:
+## Priority
 
-```json
-{
-  "timezone": "Europe/London",
-  "default_project": "inbox",
-  "client_id": "YOUR_CLIENT_ID",
-  "client_secret": "YOUR_CLIENT_SECRET"
-}
-```
+`none` (default) · `low` · `medium` · `high`
 
-Token is stored at `~/.config/tt/token.json`.
+---
 
-## Date Parsing
+## License
 
-Supported date formats:
-- `today`, `tomorrow`, `yesterday`
-- `next monday`, `next friday`
-- `3pm`, `tomorrow 3pm`, `9am`
-- ISO: `2026-03-20`, `2026-03-20T15:00:00`
-- Relative: `in 2 days`, `in 3 hours`
+MIT
