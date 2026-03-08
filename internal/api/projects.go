@@ -24,7 +24,7 @@ type Project struct {
 
 // GetProjects returns all projects
 func (c *Client) GetProjects() ([]Project, error) {
-	// Try different endpoints to get all projects
+	// Get projects from /project endpoint
 	data, err := c.doRequest("GET", "/project", nil)
 	if err != nil {
 		return nil, err
@@ -63,14 +63,34 @@ func (c *Client) GetProjects() ([]Project, error) {
 		}
 	}
 
-	// If still only one project, try to get more from /project/all
-	if len(projects) <= 1 {
-		dataAll, err := c.doRequest("GET", "/project/all", nil)
-		if err == nil {
-			var allProjects []Project
-			if err := json.Unmarshal(dataAll, &allProjects); err == nil {
-				if len(allProjects) > len(projects) {
-					projects = allProjects
+	// Try to also get project folders/groups and their projects
+	folderData, folderErr := c.doRequest("GET", "/project/folder", nil)
+	if folderErr == nil && len(folderData) > 0 {
+		var folders []map[string]interface{}
+		if json.Unmarshal(folderData, &folders) == nil {
+			// For each folder, try to get its projects
+			for _, folder := range folders {
+				if folderID, ok := folder["id"].(string); ok {
+					// Try to get projects in this folder
+					folderProjectsData, _ := c.doRequest("GET", "/project/folder/"+folderID, nil)
+					if len(folderProjectsData) > 0 {
+						var folderProjects []Project
+						if json.Unmarshal(folderProjectsData, &folderProjects) == nil {
+							for _, fp := range folderProjects {
+								// Check if already in list
+								exists := false
+								for _, p := range projects {
+									if p.ID == fp.ID {
+										exists = true
+										break
+									}
+								}
+								if !exists {
+									projects = append(projects, fp)
+								}
+							}
+						}
+					}
 				}
 			}
 		}
