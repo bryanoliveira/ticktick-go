@@ -11,21 +11,31 @@ import (
 	"ticktick-go/internal/dateparse"
 )
 
+type ChecklistItem struct {
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	Status        int    `json:"status"` // 0=open, 2=done
+	CompletedTime string `json:"completedTime,omitempty"`
+	SortOrder     int64  `json:"sortOrder,omitempty"`
+}
+
 type Task struct {
-	ID             string     `json:"id"`
-	ProjectID      string     `json:"projectId"`
-	Title          string     `json:"title"`
-	Content        string     `json:"content,omitempty"`
-	Priority       int        `json:"priority"` // 0=None, 1=Low, 2=Medium, 3=High
-	DueDate        string     `json:"dueDate,omitempty"`
-	StartDate      string     `json:"startDate,omitempty"`
-	IsAllDay       bool       `json:"isAllDay"`
-	Tags           []string   `json:"tags,omitempty"`
-	Status         int        `json:"status"` // 0=Incomplete, 2=Complete
-	CompletedTime  string     `json:"completedTime,omitempty"`
-	CreatedTime    string     `json:"createdTime,omitempty"`
-	ModifiedTime   string     `json:"modifiedTime,omitempty"`
-	Reminders      []Reminder `json:"reminders,omitempty"`
+	ID             string          `json:"id"`
+	ProjectID      string          `json:"projectId"`
+	Title          string          `json:"title"`
+	Content        string          `json:"content,omitempty"`
+	Priority       int             `json:"priority"` // 0=None, 1=Low, 2=Medium, 3=High
+	DueDate        string          `json:"dueDate,omitempty"`
+	StartDate      string          `json:"startDate,omitempty"`
+	IsAllDay       bool            `json:"isAllDay"`
+	Tags           []string        `json:"tags,omitempty"`
+	Status         int             `json:"status"` // 0=Incomplete, 2=Complete
+	CompletedTime  string          `json:"completedTime,omitempty"`
+	CreatedTime    string          `json:"createdTime,omitempty"`
+	ModifiedTime   string          `json:"modifiedTime,omitempty"`
+	Reminders      []Reminder      `json:"reminders,omitempty"`
+	Items          []ChecklistItem `json:"items,omitempty"`
+	Kind           string          `json:"kind,omitempty"`
 }
 
 type Reminder struct {
@@ -196,6 +206,61 @@ func (c *Client) DeleteTask(projectID, taskID string) error {
 	return err
 }
 
+// GetChecklistItems returns checklist items for a task
+func (c *Client) GetChecklistItems(taskID string) ([]ChecklistItem, error) {
+	data, err := c.doRequest("GET", "/task/"+taskID+"/item", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []ChecklistItem
+	if err := json.Unmarshal(data, &items); err != nil {
+		return nil, fmt.Errorf("failed to parse checklist items: %v", err)
+	}
+
+	return items, nil
+}
+
+// AddChecklistItem adds a new checklist item to a task
+func (c *Client) AddChecklistItem(taskID string, title string) (*ChecklistItem, error) {
+	item := map[string]string{
+		"title": title,
+	}
+
+	data, err := c.doRequest("POST", "/task/"+taskID+"/item", item)
+	if err != nil {
+		return nil, err
+	}
+
+	var created ChecklistItem
+	if err := json.Unmarshal(data, &created); err != nil {
+		return nil, err
+	}
+
+	return &created, nil
+}
+
+// UpdateChecklistItem updates a checklist item
+func (c *Client) UpdateChecklistItem(taskID string, item *ChecklistItem) (*ChecklistItem, error) {
+	data, err := c.doRequest("POST", "/task/"+taskID+"/item/"+item.ID, item)
+	if err != nil {
+		return nil, err
+	}
+
+	var updated ChecklistItem
+	if err := json.Unmarshal(data, &updated); err != nil {
+		return nil, err
+	}
+
+	return &updated, nil
+}
+
+// DeleteChecklistItem deletes a checklist item
+func (c *Client) DeleteChecklistItem(taskID, itemID string) error {
+	_, err := c.doRequest("DELETE", "/task/"+taskID+"/item/"+itemID, nil)
+	return err
+}
+
 // GetInboxProjectID returns the inbox project ID
 func (c *Client) GetInboxProjectID() (string, error) {
 	projects, err := c.GetProjects()
@@ -251,6 +316,14 @@ func StatusToString(s int) string {
 		return "Completed"
 	}
 	return "Active"
+}
+
+// ChecklistItemStatusToString converts checklist item status to readable string
+func ChecklistItemStatusToString(s int) string {
+	if s == 2 {
+		return "Completed"
+	}
+	return "Open"
 }
 
 // ParseReminders parses comma-separated reminder strings into Reminder structs

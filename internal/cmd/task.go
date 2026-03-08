@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	taskCmd.AddCommand(taskListCmd, taskAddCmd, taskGetCmd, taskDoneCmd, taskDeleteCmd, taskEditCmd)
+	taskCmd.AddCommand(taskListCmd, taskAddCmd, taskGetCmd, taskDoneCmd, taskDeleteCmd, taskEditCmd, taskItemsCmd, taskItemAddCmd, taskItemDoneCmd, taskItemDeleteCmd)
 	
 	// Add global json flag to task commands
 	taskListCmd.Flags().BoolVarP(&jsonFlag, "json", "j", false, "Output in JSON format")
@@ -407,4 +407,126 @@ func filterByTag(tasks []api.Task, filter string) []api.Task {
 		}
 	}
 	return filtered
+}
+
+// taskItemsCmd lists checklist items for a task
+var taskItemsCmd = &cobra.Command{
+	Use:   "items [task-id]",
+	Short: "List checklist items for a task",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg := config.Load()
+		client := api.NewClient(cfg)
+
+		taskID := args[0]
+
+		items, err := client.GetChecklistItems(taskID)
+		if err != nil {
+			return err
+		}
+
+		if len(items) == 0 {
+			fmt.Println("No checklist items found.")
+			return nil
+		}
+
+		fmt.Println()
+		for _, item := range items {
+			checkbox := "[ ]"
+			if item.Status == 2 {
+				checkbox = "[x]"
+			}
+			fmt.Printf("  %s %s (id: %s)\n", checkbox, item.Title, item.ID)
+		}
+		fmt.Println()
+		return nil
+	},
+}
+
+// taskItemAddCmd adds a checklist item to a task
+var taskItemAddCmd = &cobra.Command{
+	Use:   "item-add [task-id] [title]",
+	Short: "Add a checklist item to a task",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg := config.Load()
+		client := api.NewClient(cfg)
+
+		taskID := args[0]
+		title := args[1]
+
+		created, err := client.AddChecklistItem(taskID, title)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("✓ Checklist item added!")
+		fmt.Printf("  ID: %s\n", created.ID)
+		fmt.Printf("  Title: %s\n", created.Title)
+		return nil
+	},
+}
+
+// taskItemDoneCmd marks a checklist item as complete
+var taskItemDoneCmd = &cobra.Command{
+	Use:   "item-done [task-id] [item-id]",
+	Short: "Mark a checklist item as complete",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg := config.Load()
+		client := api.NewClient(cfg)
+
+		taskID := args[0]
+		itemID := args[1]
+
+		// Get current item
+		items, err := client.GetChecklistItems(taskID)
+		if err != nil {
+			return err
+		}
+
+		var item *api.ChecklistItem
+		for i := range items {
+			if items[i].ID == itemID {
+				item = &items[i]
+				break
+			}
+		}
+
+		if item == nil {
+			return fmt.Errorf("checklist item not found: %s", itemID)
+		}
+
+		// Update status to done (2)
+		item.Status = 2
+
+		_, err = client.UpdateChecklistItem(taskID, item)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("✓ Checklist item marked as complete!")
+		return nil
+	},
+}
+
+// taskItemDeleteCmd deletes a checklist item
+var taskItemDeleteCmd = &cobra.Command{
+	Use:   "item-delete [task-id] [item-id]",
+	Short: "Delete a checklist item",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg := config.Load()
+		client := api.NewClient(cfg)
+
+		taskID := args[0]
+		itemID := args[1]
+
+		if err := client.DeleteChecklistItem(taskID, itemID); err != nil {
+			return err
+		}
+
+		fmt.Println("✓ Checklist item deleted!")
+		return nil
+	},
 }

@@ -52,13 +52,26 @@ func OutputTaskList(tasks []api.Task, client *api.Client) error {
 			reminderIndicator = " 🔔"
 		}
 
-		fmt.Printf("%s %s  %-30s → %-15s due: %s%s\n", 
+		// Format checklist count badge
+		checklistBadge := ""
+		if len(t.Items) > 0 {
+			completed := 0
+			for _, item := range t.Items {
+				if item.Status == 2 {
+					completed++
+				}
+			}
+			checklistBadge = fmt.Sprintf(" [%d/%d]", completed, len(t.Items))
+		}
+
+		fmt.Printf("%s %s  %-30s → %-15s due: %s%s%s\n",
 			statusPrefix,
-			priorityStr, 
-			truncate(t.Title, 30), 
+			priorityStr,
+			truncate(t.Title, 30),
 			truncate(projectName, 15),
 			dueStr,
-			reminderIndicator)
+			reminderIndicator,
+			checklistBadge)
 	}
 	fmt.Println()
 
@@ -76,32 +89,45 @@ func OutputTaskDetail(task *api.Task, projectID string, client *api.Client) erro
 	fmt.Println("│ Title:    " + task.Title)
 	fmt.Println("│ Project:  " + projectName)
 	fmt.Println("│ Priority: " + priority)
-	
+
 	if task.DueDate != "" {
 		fmt.Println("│ Due:      " + formatDueDateFull(task.DueDate))
 	} else {
 		fmt.Println("│ Due:      no due date")
 	}
-	
+
 	if len(task.Tags) > 0 {
 		fmt.Println("│ Tags:     " + strings.Join(task.Tags, ", "))
 	} else {
 		fmt.Println("│ Tags:     none")
 	}
-	
+
 	if len(task.Reminders) > 0 {
 		fmt.Println("│ Reminders:")
 		for _, r := range task.Reminders {
 			fmt.Println("│   🔔 " + api.ReminderToHuman(r.Trigger))
 		}
 	}
-	
+
 	fmt.Println("│ Status:   " + status)
-	
+
 	if task.Content != "" {
 		fmt.Println("│ Notes:    " + task.Content)
 	}
-	
+
+	// Show checklist items if any
+	if len(task.Items) > 0 {
+		fmt.Println("│")
+		fmt.Println("│ Checklist:")
+		for _, item := range task.Items {
+			checkbox := "[ ]"
+			if item.Status == 2 {
+				checkbox = "[x]"
+			}
+			fmt.Printf("│   %s %s\n", checkbox, item.Title)
+		}
+	}
+
 	fmt.Println("╰" + strings.Repeat("─", 50) + "╯")
 	fmt.Println()
 
