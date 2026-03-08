@@ -207,57 +207,106 @@ func (c *Client) DeleteTask(projectID, taskID string) error {
 }
 
 // GetChecklistItems returns checklist items for a task
-func (c *Client) GetChecklistItems(taskID string) ([]ChecklistItem, error) {
-	data, err := c.doRequest("GET", "/task/"+taskID+"/item", nil)
+func (c *Client) GetChecklistItems(projectID, taskID string) ([]ChecklistItem, error) {
+	task, err := c.GetTask(projectID, taskID)
 	if err != nil {
 		return nil, err
 	}
 
-	var items []ChecklistItem
-	if err := json.Unmarshal(data, &items); err != nil {
-		return nil, fmt.Errorf("failed to parse checklist items: %v", err)
-	}
-
-	return items, nil
+	return task.Items, nil
 }
 
 // AddChecklistItem adds a new checklist item to a task
-func (c *Client) AddChecklistItem(taskID string, title string) (*ChecklistItem, error) {
-	item := map[string]string{
-		"title": title,
-	}
-
-	data, err := c.doRequest("POST", "/task/"+taskID+"/item", item)
+func (c *Client) AddChecklistItem(projectID, taskID string, title string) (*ChecklistItem, error) {
+	// Get the current task to get existing items
+	task, err := c.GetTask(projectID, taskID)
 	if err != nil {
 		return nil, err
 	}
 
-	var created ChecklistItem
-	if err := json.Unmarshal(data, &created); err != nil {
+	// Create new item with a sort order
+	newItem := ChecklistItem{
+		Title:     title,
+		Status:    0,
+		SortOrder: int64(len(task.Items) * 1000),
+	}
+
+	// Add to items array
+	task.Items = append(task.Items, newItem)
+
+	// Update the task with new items
+	updated, err := c.UpdateTask(task)
+	if err != nil {
 		return nil, err
 	}
 
-	return &created, nil
+	// Return the newly added item
+	if len(updated.Items) > 0 {
+		return &updated.Items[len(updated.Items)-1], nil
+	}
+
+	return nil, fmt.Errorf("failed to add checklist item")
 }
 
 // UpdateChecklistItem updates a checklist item
-func (c *Client) UpdateChecklistItem(taskID string, item *ChecklistItem) (*ChecklistItem, error) {
-	data, err := c.doRequest("POST", "/task/"+taskID+"/item/"+item.ID, item)
+func (c *Client) UpdateChecklistItem(projectID, taskID string, item *ChecklistItem) (*ChecklistItem, error) {
+	// Get the current task
+	task, err := c.GetTask(projectID, taskID)
 	if err != nil {
 		return nil, err
 	}
 
-	var updated ChecklistItem
-	if err := json.Unmarshal(data, &updated); err != nil {
+	// Find and update the item
+	found := false
+	for i, existingItem := range task.Items {
+		if existingItem.ID == item.ID {
+			task.Items[i] = *item
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil, fmt.Errorf("item not found: %s", item.ID)
+	}
+
+	// Update the task
+	_, err = c.UpdateTask(task)
+	if err != nil {
 		return nil, err
 	}
 
-	return &updated, nil
+	// Return the updated item (use the one we sent since IDs may change)
+	return item, nil
 }
 
 // DeleteChecklistItem deletes a checklist item
-func (c *Client) DeleteChecklistItem(taskID, itemID string) error {
-	_, err := c.doRequest("DELETE", "/task/"+taskID+"/item/"+itemID, nil)
+func (c *Client) DeleteChecklistItem(projectID, taskID, itemID string) error {
+	// Get the current task
+	task, err := c.GetTask(projectID, taskID)
+	if err != nil {
+		return err
+	}
+
+	// Find and remove the item
+	found := false
+	var newItems []ChecklistItem
+	for _, existingItem := range task.Items {
+		if existingItem.ID != itemID {
+			newItems = append(newItems, existingItem)
+		} else {
+			found = true
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("item not found: %s", itemID)
+	}
+
+	task.Items = newItems
+
+	// Update the task
+	_, err = c.UpdateTask(task)
 	return err
 }
 

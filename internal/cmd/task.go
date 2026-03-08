@@ -31,6 +31,8 @@ func init() {
 	taskAddCmd.Flags().String("tag", "", "Tags (comma-separated)")
 	taskAddCmd.Flags().StringP("note", "n", "", "Task notes")
 	taskAddCmd.Flags().StringP("remind", "r", "", "Reminders (comma-separated: 15m, 1h, 1d, on-time)")
+	taskAddCmd.Flags().Bool("checklist", false, "Create as checklist task")
+	taskAddCmd.Flags().String("items", "", "Initial checklist items (comma-separated)")
 	
 	// Edit flags
 	taskEditCmd.Flags().String("title", "", "New title")
@@ -38,6 +40,7 @@ func init() {
 	taskEditCmd.Flags().String("priority", "", "New priority")
 	taskEditCmd.Flags().String("tag", "", "New tags (comma-separated)")
 	taskEditCmd.Flags().StringP("remind", "r", "", "Reminders (comma-separated: 15m, 1h, 1d, on-time)")
+	taskEditCmd.Flags().String("kind", "", "New kind (checklist)")
 }
 
 var taskCmd = &cobra.Command{
@@ -111,6 +114,14 @@ var taskAddCmd = &cobra.Command{
 		tagsStr, _ := cmd.Flags().GetString("tag")
 		note, _ := cmd.Flags().GetString("note")
 		remindStr, _ := cmd.Flags().GetString("remind")
+		itemsStr, _ := cmd.Flags().GetString("items")
+		isChecklist, _ := cmd.Flags().GetBool("checklist")
+
+		// Determine kind
+		kindStr := ""
+		if isChecklist || itemsStr != "" {
+			kindStr = "CHECKLIST"
+		}
 
 		// Get project ID
 		var projectID string
@@ -145,6 +156,22 @@ var taskAddCmd = &cobra.Command{
 			return fmt.Errorf("failed to parse reminders: %w", err)
 		}
 
+		// Parse checklist items
+		var items []api.ChecklistItem
+		if itemsStr != "" {
+			itemTitles := strings.Split(itemsStr, ",")
+			for i, itemTitle := range itemTitles {
+				itemTitle = strings.TrimSpace(itemTitle)
+				if itemTitle != "" {
+					items = append(items, api.ChecklistItem{
+						Title:    itemTitle,
+						Status:   0,
+						SortOrder: int64(i * 1000),
+					})
+				}
+			}
+		}
+
 		task := &api.Task{
 			ProjectID: projectID,
 			Title:     title,
@@ -155,6 +182,8 @@ var taskAddCmd = &cobra.Command{
 			IsAllDay:  dueStr != "" && !strings.ContainsAny(dueStr, "0123456789"),
 			Status:    0,
 			Reminders: reminders,
+			Kind:      kindStr,
+			Items:     items,
 		}
 
 		created, err := client.CreateTask(task)
@@ -304,6 +333,7 @@ var taskEditCmd = &cobra.Command{
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		tagsStr, _ := cmd.Flags().GetString("tag")
 		remindStr, _ := cmd.Flags().GetString("remind")
+		kindStr, _ := cmd.Flags().GetString("kind")
 
 		// Find the task
 		tasks, err := client.GetAllTasks()
@@ -350,6 +380,9 @@ var taskEditCmd = &cobra.Command{
 				return fmt.Errorf("failed to parse reminders: %w", err)
 			}
 			task.Reminders = reminders
+		}
+		if kindStr != "" {
+			task.Kind = kindStr
 		}
 
 		_, err = client.UpdateTask(task)
@@ -420,7 +453,25 @@ var taskItemsCmd = &cobra.Command{
 
 		taskID := args[0]
 
-		items, err := client.GetChecklistItems(taskID)
+		// Find project ID
+		tasks, err := client.GetAllTasks()
+		if err != nil {
+			return err
+		}
+
+		var projectID string
+		for _, t := range tasks {
+			if t.ID == taskID {
+				projectID = t.ProjectID
+				break
+			}
+		}
+
+		if projectID == "" {
+			return fmt.Errorf("task not found: %s", taskID)
+		}
+
+		items, err := client.GetChecklistItems(projectID, taskID)
 		if err != nil {
 			return err
 		}
@@ -455,7 +506,25 @@ var taskItemAddCmd = &cobra.Command{
 		taskID := args[0]
 		title := args[1]
 
-		created, err := client.AddChecklistItem(taskID, title)
+		// Find project ID
+		tasks, err := client.GetAllTasks()
+		if err != nil {
+			return err
+		}
+
+		var projectID string
+		for _, t := range tasks {
+			if t.ID == taskID {
+				projectID = t.ProjectID
+				break
+			}
+		}
+
+		if projectID == "" {
+			return fmt.Errorf("task not found: %s", taskID)
+		}
+
+		created, err := client.AddChecklistItem(projectID, taskID, title)
 		if err != nil {
 			return err
 		}
@@ -479,8 +548,26 @@ var taskItemDoneCmd = &cobra.Command{
 		taskID := args[0]
 		itemID := args[1]
 
+		// Find project ID
+		tasks, err := client.GetAllTasks()
+		if err != nil {
+			return err
+		}
+
+		var projectID string
+		for _, t := range tasks {
+			if t.ID == taskID {
+				projectID = t.ProjectID
+				break
+			}
+		}
+
+		if projectID == "" {
+			return fmt.Errorf("task not found: %s", taskID)
+		}
+
 		// Get current item
-		items, err := client.GetChecklistItems(taskID)
+		items, err := client.GetChecklistItems(projectID, taskID)
 		if err != nil {
 			return err
 		}
@@ -500,7 +587,7 @@ var taskItemDoneCmd = &cobra.Command{
 		// Update status to done (2)
 		item.Status = 2
 
-		_, err = client.UpdateChecklistItem(taskID, item)
+		_, err = client.UpdateChecklistItem(projectID, taskID, item)
 		if err != nil {
 			return err
 		}
@@ -522,7 +609,25 @@ var taskItemDeleteCmd = &cobra.Command{
 		taskID := args[0]
 		itemID := args[1]
 
-		if err := client.DeleteChecklistItem(taskID, itemID); err != nil {
+		// Find project ID
+		tasks, err := client.GetAllTasks()
+		if err != nil {
+			return err
+		}
+
+		var projectID string
+		for _, t := range tasks {
+			if t.ID == taskID {
+				projectID = t.ProjectID
+				break
+			}
+		}
+
+		if projectID == "" {
+			return fmt.Errorf("task not found: %s", taskID)
+		}
+
+		if err := client.DeleteChecklistItem(projectID, taskID, itemID); err != nil {
 			return err
 		}
 
