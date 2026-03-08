@@ -64,14 +64,16 @@ Add `--json` or `-j` flag to any command for JSON output.
 
 ## Configuration
 
+Register your app at [developer.ticktick.com](https://developer.ticktick.com/manage) to get a client ID and secret.
+
 Config is stored at `~/.config/tt/config.json`:
 
 ```json
 {
   "timezone": "Europe/London",
   "default_project": "inbox",
-  "client_id": "24qE700R7e12YnSNWj",
-  "client_secret": "4kF89Zm77tWhMvhNq0TiL4PTxavRTdCJ"
+  "client_id": "YOUR_CLIENT_ID",
+  "client_secret": "YOUR_CLIENT_SECRET"
 }
 ```
 

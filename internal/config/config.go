@@ -16,8 +16,6 @@ type Config struct {
 var defaultConfig = Config{
 	Timezone:       "Europe/London",
 	DefaultProject: "inbox",
-	ClientID:       "24qE700R7e12YnSNWj",
-	ClientSecret:   "4kF89Zm77tWhMvhNq0TiL4PTxavRTdCJ",
 }
 
 func ConfigPath() string {
@@ -37,12 +35,6 @@ func Load() *Config {
 		return &defaultConfig
 	}
 
-	if cfg.ClientID == "" {
-		cfg.ClientID = defaultConfig.ClientID
-	}
-	if cfg.ClientSecret == "" {
-		cfg.ClientSecret = defaultConfig.ClientSecret
-	}
 	if cfg.Timezone == "" {
 		cfg.Timezone = defaultConfig.Timezone
 	}
