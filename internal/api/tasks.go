@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,8 @@ type Task struct {
 	Priority       int             `json:"priority"` // 0=None, 1=Low, 2=Medium, 3=High
 	DueDate        string          `json:"dueDate,omitempty"`
 	StartDate      string          `json:"startDate,omitempty"`
+	Repeat         string          `json:"repeat,omitempty"`
+	RepeatFlag     string          `json:"repeatFlag,omitempty"`
 	IsAllDay       bool            `json:"isAllDay"`
 	Tags           []string        `json:"tags,omitempty"`
 	Status         int             `json:"status"` // 0=Incomplete, 2=Complete
@@ -579,6 +582,162 @@ func ParseDueDate(due string, timezone string) (string, error) {
 		offsetStr = "+0000"
 	}
 	return parsed.Format("2006-01-02T15:04:05") + offsetStr, nil
+}
+
+// ParseRepeat parses repeat string to TickTick RRULE format
+// Supports: daily, weekly, monthly, yearly, or raw RRULE strings
+func ParseRepeat(repeat string) (string, error) {
+	if repeat == "" {
+		return "", nil
+	}
+
+	lower := strings.ToLower(repeat)
+
+	// If it already looks like an RRULE, return as-is
+	if strings.HasPrefix(lower, "rrule:") {
+		return strings.ToUpper(repeat), nil
+	}
+
+	// Parse shorthand values
+	switch lower {
+	case "daily", "every day", "1d":
+		return "RRULE:FREQ=DAILY;INTERVAL=1", nil
+	case "weekly", "every week", "1w":
+		return "RRULE:FREQ=WEEKLY;INTERVAL=1", nil
+	case "monthly", "every month", "1m":
+		return "RRULE:FREQ=MONTHLY;INTERVAL=1", nil
+	case "yearly", "every year", "1y":
+		return "RRULE:FREQ=YEARLY;INTERVAL=1", nil
+	}
+
+	// Try to parse "every X days/weeks/months"
+	// e.g., "every 3 days" -> RRULE:FREQ=DAILY;INTERVAL=3
+	everyRe := regexp.MustCompile(`^every (\d+) (day|week|month|year)s?$`)
+	matches := everyRe.FindStringSubmatch(lower)
+	if len(matches) == 3 {
+		amount := 1
+		fmt.Sscanf(matches[1], "%d", &amount)
+
+		switch matches[2] {
+		case "day":
+			return fmt.Sprintf("RRULE:FREQ=DAILY;INTERVAL=%d", amount), nil
+		case "week":
+			return fmt.Sprintf("RRULE:FREQ=WEEKLY;INTERVAL=%d", amount), nil
+		case "month":
+			return fmt.Sprintf("RRULE:FREQ=MONTHLY;INTERVAL=%d", amount), nil
+		case "year":
+			return fmt.Sprintf("RRULE:FREQ=YEARLY;INTERVAL=%d", amount), nil
+		}
+	}
+
+	// Try to parse "every Mon/Tue/Wed/Thu/Fri/Sat/Sun"
+	weekdayRe := regexp.MustCompile(`^every (mon|tue|wed|thu|fri|sat|sun)$`)
+	weekdayMatches := weekdayRe.FindStringSubmatch(lower)
+	if len(weekdayMatches) == 2 {
+		dayMap := map[string]string{
+			"mon": "MO", "tue": "TU", "wed": "WE",
+			"thu": "TH", "fri": "FR", "sat": "SA", "sun": "SU",
+		}
+		if day, ok := dayMap[weekdayMatches[1]]; ok {
+			return fmt.Sprintf("RRULE:FREQ=WEEKLY;BYDAY=%s", day), nil
+		}
+	}
+
+	// Try to parse weekdays (Mon-Fri)
+	if lower == "weekdays" || lower == "weekday" {
+		return "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR", nil
+	}
+
+	// Try to parse weekends
+	if lower == "weekends" || lower == "weekend" {
+		return "RRULE:FREQ=WEEKLY;BYDAY=SA,SU", nil
+	}
+
+	return "", fmt.Errorf("unknown repeat format: %s", repeat)
+}
+
+// RepeatToHuman converts RRULE format to human-readable string
+func RepeatToHuman(repeat string) string {
+	if repeat == "" {
+		return ""
+	}
+
+	// Remove RRULE: prefix
+	if strings.HasPrefix(strings.ToUpper(repeat), "RRULE:") {
+		repeat = repeat[6:]
+	}
+
+	// Parse common patterns
+	lower := strings.ToLower(repeat)
+
+	if strings.Contains(lower, "freq=daily") {
+		// Check for interval
+		if strings.Contains(lower, "interval=1") || !strings.Contains(lower, "interval=") {
+			return "Daily"
+		}
+		// Try to extract interval
+		intervalRe := regexp.MustCompile(`interval=(\d+)`)
+		matches := intervalRe.FindStringSubmatch(lower)
+		if len(matches) == 2 {
+			return fmt.Sprintf("Every %s days", matches[1])
+		}
+		return "Daily"
+	}
+
+	if strings.Contains(lower, "freq=weekly") {
+		if byday := extractByDay(lower); byday != "" {
+			return fmt.Sprintf("Weekly on %s", byday)
+		}
+		if strings.Contains(lower, "interval=1") || !strings.Contains(lower, "interval=") {
+			return "Weekly"
+		}
+		intervalRe := regexp.MustCompile(`interval=(\d+)`)
+		matches := intervalRe.FindStringSubmatch(lower)
+		if len(matches) == 2 {
+			return fmt.Sprintf("Every %s weeks", matches[1])
+		}
+		return "Weekly"
+	}
+
+	if strings.Contains(lower, "freq=monthly") {
+		if strings.Contains(lower, "interval=1") || !strings.Contains(lower, "interval=") {
+			return "Monthly"
+		}
+		intervalRe := regexp.MustCompile(`interval=(\d+)`)
+		matches := intervalRe.FindStringSubmatch(lower)
+		if len(matches) == 2 {
+			return fmt.Sprintf("Every %s months", matches[1])
+		}
+		return "Monthly"
+	}
+
+	if strings.Contains(lower, "freq=yearly") {
+		return "Yearly"
+	}
+
+	return repeat
+}
+
+func extractByDay(rrule string) string {
+	bydayRe := regexp.MustCompile(`byday=([A-Z,]+)`)
+	matches := bydayRe.FindStringSubmatch(rrule)
+	if len(matches) == 2 {
+		dayMap := map[string]string{
+			"MO": "Monday", "TU": "Tuesday", "WE": "Wednesday",
+			"TH": "Thursday", "FR": "Friday", "SA": "Saturday", "SU": "Sunday",
+		}
+		days := strings.Split(matches[1], ",")
+		var result []string
+		for _, d := range days {
+			if name, ok := dayMap[d]; ok {
+				result = append(result, name)
+			}
+		}
+		if len(result) > 0 {
+			return strings.Join(result, ", ")
+		}
+	}
+	return ""
 }
 
 // ToLocalTime converts TickTick time to local time

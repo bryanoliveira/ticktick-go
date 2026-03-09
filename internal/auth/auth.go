@@ -87,7 +87,7 @@ func RefreshToken(cfg *config.Config) (*Token, error) {
 	}
 
 	if current.RefreshToken == "" {
-		return nil, fmt.Errorf("no refresh token available. Please run 'tt auth login'")
+		return nil, fmt.Errorf("no refresh token available. Please run 'ttg auth login'")
 	}
 
 	data := url.Values{}
@@ -255,7 +255,7 @@ func exchangeCodeForToken(code string, cfg *config.Config) error {
 func GetValidToken(cfg *config.Config) (*Token, error) {
 	token, err := LoadToken()
 	if err != nil {
-		return nil, fmt.Errorf("not authenticated. Run 'tt auth login' first")
+		return nil, fmt.Errorf("not authenticated. Run 'ttg auth login' first")
 	}
 
 	// If token is expired and we have a refresh token, try to refresh

@@ -29,8 +29,8 @@ Add tasks, manage projects, and check off your day without leaving the terminal.
 **From source (macOS, Linux, any platform):**
 
 ```bash
-git clone https://github.com/dhruvkelawala/tt
-cd tt
+git clone https://github.com/dhruvkelawala/ticktick-go
+cd ticktick-go
 make install   # builds and copies to ~/.local/bin/ttg
 ```
 

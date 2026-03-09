@@ -33,7 +33,7 @@ var authStatusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token, err := auth.LoadToken()
 		if err != nil {
-			fmt.Println("Not authenticated. Run 'tt auth login' first.")
+			fmt.Println("Not authenticated. Run 'ttg auth login' first.")
 			return nil
 		}
 
@@ -44,7 +44,7 @@ var authStatusCmd = &cobra.Command{
 			fmt.Printf("Token expires at: %s\n", expiresAt.Format("2006-01-02 15:04:05"))
 
 			if token.IsExpired() {
-				fmt.Println("⚠ Token is expired. Run 'tt auth login' to refresh.")
+				fmt.Println("⚠ Token is expired. Run 'ttg auth login' to refresh.")
 			} else {
 				remaining := time.Until(expiresAt)
 				fmt.Printf("Time remaining: %v\n", remaining.Round(time.Minute))

@@ -4,7 +4,7 @@ description: >
   Terminal CLI for TickTick — add tasks, list projects, mark things done, and manage your inbox without leaving the shell. Built in Go, uses the official TickTick Open API (OAuth2). Binary is `ttg`.
 version: 1.0.0
 author: dhruvkelawala
-homepage: https://github.com/dhruvkelawala/tt
+homepage: https://github.com/dhruvkelawala/ticktick-go
 metadata:
   openclaw:
     emoji: ✅
@@ -16,7 +16,7 @@ metadata:
         kind: shell
         label: "Build and install ttg from source"
         run: |
-          git clone https://github.com/dhruvkelawala/tt /tmp/ttg-install
+          git clone https://github.com/dhruvkelawala/ticktick-go /tmp/ttg-install
           cd /tmp/ttg-install
           make install
           rm -rf /tmp/ttg-install

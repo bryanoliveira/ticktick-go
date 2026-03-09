@@ -29,6 +29,8 @@ func init() {
 	taskAddCmd.Flags().StringP("project", "p", "inbox", "Project name")
 	taskAddCmd.Flags().StringP("priority", "P", "", "Priority (high, medium, low)")
 	taskAddCmd.Flags().StringP("due", "d", "", "Due date (natural language)")
+	taskAddCmd.Flags().String("start", "", "Start date (natural language)")
+	taskAddCmd.Flags().String("repeat", "", "Repeat (daily, weekly, monthly, yearly, or rrule)")
 	taskAddCmd.Flags().String("tag", "", "Tags (comma-separated)")
 	taskAddCmd.Flags().StringP("note", "n", "", "Task notes")
 	taskAddCmd.Flags().StringP("remind", "r", "", "Reminders (comma-separated: 15m, 1h, 1d, on-time)")
@@ -47,6 +49,8 @@ func init() {
 	// Edit flags
 	taskEditCmd.Flags().String("title", "", "New title")
 	taskEditCmd.Flags().String("due", "", "New due date")
+	taskEditCmd.Flags().String("start", "", "New start date")
+	taskEditCmd.Flags().String("repeat", "", "New repeat (daily, weekly, monthly, yearly, or rrule)")
 	taskEditCmd.Flags().String("priority", "", "New priority")
 	taskEditCmd.Flags().String("tag", "", "New tags (comma-separated)")
 	taskEditCmd.Flags().StringP("remind", "r", "", "Reminders (comma-separated: 15m, 1h, 1d, on-time)")
@@ -125,6 +129,8 @@ var taskAddCmd = &cobra.Command{
 		projectName, _ := cmd.Flags().GetString("project")
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		dueStr, _ := cmd.Flags().GetString("due")
+		startStr, _ := cmd.Flags().GetString("start")
+		repeatStr, _ := cmd.Flags().GetString("repeat")
 		tagsStr, _ := cmd.Flags().GetString("tag")
 		note, _ := cmd.Flags().GetString("note")
 		remindStr, _ := cmd.Flags().GetString("remind")
@@ -178,6 +184,18 @@ var taskAddCmd = &cobra.Command{
 			return fmt.Errorf("failed to parse due date: %w", err)
 		}
 
+		// Parse start date
+		startDate, err := api.ParseDueDate(startStr, cfg.Timezone)
+		if err != nil {
+			return fmt.Errorf("failed to parse start date: %w", err)
+		}
+
+		// Parse repeat
+		repeat, err := api.ParseRepeat(repeatStr)
+		if err != nil {
+			return fmt.Errorf("failed to parse repeat: %w", err)
+		}
+
 		// Parse tags
 		var tags []string
 		if tagsStr != "" {
@@ -215,6 +233,8 @@ var taskAddCmd = &cobra.Command{
 			Content:   note,
 			Priority:  api.ParsePriority(priorityStr),
 			DueDate:   dueDate,
+			StartDate: startDate,
+			Repeat: repeat,
 			Tags:      tags,
 			IsAllDay:  dueStr != "" && !strings.ContainsAny(dueStr, "0123456789"),
 			Status:    0,
@@ -235,6 +255,12 @@ var taskAddCmd = &cobra.Command{
 		fmt.Println("✓ Task created successfully!")
 		fmt.Printf("  ID: %s\n", created.ID)
 		fmt.Printf("  Title: %s\n", created.Title)
+		if created.StartDate != "" {
+			fmt.Printf("  📅 Start: %s\n", created.StartDate)
+		}
+		if created.Repeat != "" {
+			fmt.Printf("  🔄 Repeat: %s\n", api.RepeatToHuman(created.Repeat))
+		}
 		if len(created.Reminders) > 0 {
 			for _, r := range created.Reminders {
 				fmt.Printf("  🔔 Reminder: %s\n", api.ReminderToHuman(r.Trigger))
@@ -406,6 +432,8 @@ var taskEditCmd = &cobra.Command{
 		taskID := args[0]
 		title, _ := cmd.Flags().GetString("title")
 		dueStr, _ := cmd.Flags().GetString("due")
+		startStr, _ := cmd.Flags().GetString("start")
+		repeatStr, _ := cmd.Flags().GetString("repeat")
 		priorityStr, _ := cmd.Flags().GetString("priority")
 		tagsStr, _ := cmd.Flags().GetString("tag")
 		remindStr, _ := cmd.Flags().GetString("remind")
@@ -439,6 +467,20 @@ var taskEditCmd = &cobra.Command{
 				return err
 			}
 			task.DueDate = dueDate
+		}
+		if startStr != "" {
+			startDate, err := api.ParseDueDate(startStr, cfg.Timezone)
+			if err != nil {
+				return err
+			}
+			task.StartDate = startDate
+		}
+		if repeatStr != "" {
+			repeat, err := api.ParseRepeat(repeatStr)
+			if err != nil {
+				return err
+			}
+			task.Repeat = repeat
 		}
 		if priorityStr != "" {
 			task.Priority = api.ParsePriority(priorityStr)

@@ -52,6 +52,12 @@ func OutputTaskList(tasks []api.Task, client *api.Client) error {
 			reminderIndicator = " 🔔"
 		}
 
+		// Format repeat indicator
+		repeatIndicator := ""
+		if t.Repeat != "" {
+			repeatIndicator = " 🔄"
+		}
+
 		// Format checklist count badge
 		checklistBadge := ""
 		if len(t.Items) > 0 {
@@ -64,13 +70,14 @@ func OutputTaskList(tasks []api.Task, client *api.Client) error {
 			checklistBadge = fmt.Sprintf(" [%d/%d]", completed, len(t.Items))
 		}
 
-		fmt.Printf("%s %s  %-30s → %-15s due: %s%s%s\n",
+		fmt.Printf("%s %s  %-30s → %-15s due: %s%s%s%s\n",
 			statusPrefix,
 			priorityStr,
 			truncate(t.Title, 30),
 			truncate(projectName, 15),
 			dueStr,
 			reminderIndicator,
+			repeatIndicator,
 			checklistBadge)
 	}
 	fmt.Println()
@@ -90,10 +97,18 @@ func OutputTaskDetail(task *api.Task, projectID string, client *api.Client) erro
 	fmt.Println("│ Project:  " + projectName)
 	fmt.Println("│ Priority: " + priority)
 
+	if task.StartDate != "" {
+		fmt.Println("│ Start:    " + formatDueDateFull(task.StartDate))
+	}
+
 	if task.DueDate != "" {
 		fmt.Println("│ Due:      " + formatDueDateFull(task.DueDate))
 	} else {
 		fmt.Println("│ Due:      no due date")
+	}
+
+	if task.Repeat != "" {
+		fmt.Println("│ Repeat:   " + api.RepeatToHuman(task.Repeat))
 	}
 
 	if len(task.Tags) > 0 {
