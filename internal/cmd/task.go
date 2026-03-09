@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	taskCmd.AddCommand(taskListCmd, taskAddCmd, taskGetCmd, taskDoneCmd, taskDeleteCmd, taskEditCmd, taskItemsCmd, taskItemAddCmd, taskItemDoneCmd, taskItemDeleteCmd)
+	taskCmd.AddCommand(taskListCmd, taskAddCmd, taskGetCmd, taskDoneCmd, taskDeleteCmd, taskEditCmd, taskItemsCmd, taskItemAddCmd, taskItemDoneCmd, taskItemDeleteCmd, taskSearchCmd)
 	
 	// Add global json flag to task commands
 	taskListCmd.Flags().BoolVarP(&jsonFlag, "json", "j", false, "Output in JSON format")
@@ -23,6 +23,7 @@ func init() {
 	taskListCmd.Flags().String("due", "", "Filter by due date (today, overdue)")
 	taskListCmd.Flags().String("priority", "", "Filter by priority (high, medium, low)")
 	taskListCmd.Flags().String("tag", "", "Filter by tag")
+	taskListCmd.Flags().Bool("completed", false, "Show completed tasks")
 	
 	// Add flags
 	taskAddCmd.Flags().StringP("project", "p", "inbox", "Project name")
@@ -69,6 +70,7 @@ var taskListCmd = &cobra.Command{
 		dueFilter, _ := cmd.Flags().GetString("due")
 		priorityFilter, _ := cmd.Flags().GetString("priority")
 		tagFilter, _ := cmd.Flags().GetString("tag")
+		showCompleted, _ := cmd.Flags().GetBool("completed")
 
 		var tasks []api.Task
 		var err error
@@ -98,6 +100,9 @@ var taskListCmd = &cobra.Command{
 		}
 		if tagFilter != "" {
 			tasks = filterByTag(tasks, tagFilter)
+		}
+		if showCompleted {
+			tasks = filterCompleted(tasks)
 		}
 
 		if jsonFlag {
@@ -351,6 +356,45 @@ var taskDeleteCmd = &cobra.Command{
 	},
 }
 
+var taskSearchCmd = &cobra.Command{
+	Use:   "search <query>",
+	Short: "Search tasks by title",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg := config.Load()
+		client := api.NewClient(cfg)
+
+		query := args[0]
+
+		// Get all tasks
+		tasks, err := client.GetAllTasks()
+		if err != nil {
+			return err
+		}
+
+		// Filter by search query (case-insensitive substring match)
+		var filtered []api.Task
+		queryLower := strings.ToLower(query)
+		for _, t := range tasks {
+			if strings.Contains(strings.ToLower(t.Title), queryLower) {
+				filtered = append(filtered, t)
+			}
+		}
+
+		if jsonFlag {
+			return format.OutputJSON(filtered)
+		}
+
+		if len(filtered) == 0 {
+			fmt.Printf("No tasks found matching \"%s\"\n", query)
+			return nil
+		}
+
+		fmt.Printf("Found %d task(s) matching \"%s\":\n", len(filtered), query)
+		return format.OutputTaskList(filtered, client)
+	},
+}
+
 var taskEditCmd = &cobra.Command{
 	Use:   "edit [task-id]",
 	Short: "Edit a task",
@@ -469,6 +513,16 @@ func filterByTag(tasks []api.Task, filter string) []api.Task {
 				filtered = append(filtered, t)
 				break
 			}
+		}
+	}
+	return filtered
+}
+
+func filterCompleted(tasks []api.Task) []api.Task {
+	var filtered []api.Task
+	for _, t := range tasks {
+		if t.Status == 2 {
+			filtered = append(filtered, t)
 		}
 	}
 	return filtered

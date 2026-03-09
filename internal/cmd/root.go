@@ -12,6 +12,7 @@ var knownSubcommands = map[string]bool{
 	"task":    true,
 	"project": true,
 	"auth":    true,
+	"tag":     true,
 	"help":    true,
 	"version": true,
 }
