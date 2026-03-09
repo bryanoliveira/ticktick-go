@@ -34,6 +34,15 @@ func init() {
 	taskAddCmd.Flags().Bool("checklist", false, "Create as checklist task")
 	taskAddCmd.Flags().String("items", "", "Initial checklist items (comma-separated)")
 	
+	// Shorthand flags for quick-add
+	taskAddCmd.Flags().Bool("high", false, "High priority (shorthand for --priority high)")
+	taskAddCmd.Flags().Bool("medium", false, "Medium priority (shorthand for --priority medium)")
+	taskAddCmd.Flags().Bool("med", false, "Medium priority (shorthand for --priority medium)")
+	taskAddCmd.Flags().Bool("low", false, "Low priority (shorthand for --priority low)")
+	taskAddCmd.Flags().Bool("today", false, "Due today (shorthand for --due today)")
+	taskAddCmd.Flags().Bool("tmrw", false, "Due tomorrow (shorthand for --due tomorrow)")
+	taskAddCmd.Flags().Bool("tomorrow", false, "Due tomorrow (shorthand for --due tomorrow)")
+	
 	// Edit flags
 	taskEditCmd.Flags().String("title", "", "New title")
 	taskEditCmd.Flags().String("due", "", "New due date")
@@ -116,6 +125,29 @@ var taskAddCmd = &cobra.Command{
 		remindStr, _ := cmd.Flags().GetString("remind")
 		itemsStr, _ := cmd.Flags().GetString("items")
 		isChecklist, _ := cmd.Flags().GetBool("checklist")
+
+		// Parse shorthand priority flags
+		isHigh, _ := cmd.Flags().GetBool("high")
+		isMedium, _ := cmd.Flags().GetBool("medium")
+		isMed, _ := cmd.Flags().GetBool("med")
+		isLow, _ := cmd.Flags().GetBool("low")
+		if isHigh {
+			priorityStr = "high"
+		} else if isMedium || isMed {
+			priorityStr = "medium"
+		} else if isLow {
+			priorityStr = "low"
+		}
+
+		// Parse shorthand due date flags
+		isToday, _ := cmd.Flags().GetBool("today")
+		isTmrw, _ := cmd.Flags().GetBool("tmrw")
+		isTomorrow, _ := cmd.Flags().GetBool("tomorrow")
+		if isToday {
+			dueStr = "today"
+		} else if isTmrw || isTomorrow {
+			dueStr = "tomorrow"
+		}
 
 		// Determine kind
 		kindStr := ""

@@ -1,6 +1,6 @@
 <div align="center">
 
-# tt
+# ttg
 
 **A fast, minimal CLI for [TickTick](https://ticktick.com) — built in Go.**
 
@@ -26,7 +26,7 @@ Add tasks, manage projects, and check off your day without leaving the terminal.
 
 ## Installation
 
-**From source:**
+**From source (macOS, Linux, any platform):**
 
 ```bash
 git clone https://github.com/dhruvkelawala/tt
@@ -39,6 +39,8 @@ Make sure `~/.local/bin` is on your `$PATH`:
 ```bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 ```
+
+> **Platform note:** `make install` compiles from source and works on macOS (Intel + Apple Silicon), Linux (amd64, arm64), and any Go-supported platform. Requires Go 1.21+.
 
 ---
 
@@ -59,7 +61,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 3. Authenticate:
 
 ```bash
-tt auth login
+ttg auth login
 ```
 
 This opens a browser for OAuth2 and stores your token at `~/.config/ttg/token.json`.
@@ -71,27 +73,27 @@ This opens a browser for OAuth2 and stores your token at `~/.config/ttg/token.js
 ### Tasks
 
 ```bash
-tt task list                          # Inbox (default)
-tt task list --all                    # All tasks
-tt task list --project "Work"         # By project
-tt task list --due today              # Due today
-tt task list --priority high          # By priority
-tt task list --json                   # JSON output
+ttg task list                          # Inbox (default)
+ttg task list --all                    # All tasks
+ttg task list --project "Work"         # By project
+ttg task list --due today              # Due today
+ttg task list --priority high          # By priority
+ttg task list --json                   # JSON output
 
-tt task add "Buy milk"
-tt task add "Ship feature" --project "Work" --priority high --due "tomorrow 9am"
+ttg task add "Buy milk"
+ttg task add "Ship feature" --project "Work" --priority high --due "tomorrow 9am"
 
-tt task get <id>                      # Task details
-tt task done <id>                     # Mark complete
-tt task delete <id>                   # Delete
-tt task edit <id> --title "New title" --priority medium
+ttg task get <id>                      # Task details
+ttg task done <id>                     # Mark complete
+ttg task delete <id>                   # Delete
+ttg task edit <id> --title "New title" --priority medium
 ```
 
 ### Projects
 
 ```bash
-tt project list
-tt project get <id>
+ttg project list
+ttg project get <id>
 ```
 
 ### JSON / scripting
@@ -99,7 +101,7 @@ tt project get <id>
 Any command accepts `--json` / `-j`:
 
 ```bash
-tt task list --json | jq '.[].title'
+ttg task list --json | jq '.[].title'
 ```
 
 ---
