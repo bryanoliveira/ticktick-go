@@ -102,8 +102,6 @@ func (c *Client) GetInboxTasks() ([]Task, error) {
 	}
 
 	return tasks, nil
-
-	return tasks, nil
 }
 
 // GetProjectTasks returns tasks from a specific project
@@ -754,10 +752,11 @@ func ToLocalTime(t string) time.Time {
 		"2006-01-02T15:04:05",
 		"2006-01-02",
 	}
-	
+
 	for _, f := range formats {
 		if tm, err := time.Parse(f, t); err == nil {
-			return tm
+			// Convert to local timezone for correct date comparisons
+			return tm.Local()
 		}
 	}
 	return time.Time{}

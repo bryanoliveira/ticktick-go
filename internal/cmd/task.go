@@ -79,7 +79,7 @@ var taskListCmd = &cobra.Command{
 		var tasks []api.Task
 		var err error
 
-		if showAll {
+		if showAll || (dueFilter != "" && projectName == "") {
 			tasks, err = client.GetAllTasks()
 		} else if projectName != "" {
 			projectID, err := client.GetProjectIDByName(projectName)
