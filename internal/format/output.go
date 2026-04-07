@@ -76,16 +76,23 @@ func OutputTaskList(tasks []api.Task, client *api.Client) error {
 			progressBadge = fmt.Sprintf(" [%d%%]", t.Progress)
 		}
 
-		fmt.Printf("%s %s  %-30s → %-15s due: %s%s%s%s%s\n",
+		// Format pin indicator
+		pinIndicator := ""
+		if t.IsPinned {
+			pinIndicator = " 📌"
+		}
+
+		fmt.Printf("%s %s  %-30s → %-15s due: %s%s%s%s%s%s\n",
 			statusPrefix,
 			priorityStr,
-			truncate(t.Title, 30),
-			truncate(projectName, 15),
+			t.Title,
+			projectName,
 			dueStr,
 			reminderIndicator,
 			repeatIndicator,
 			checklistBadge,
-			progressBadge)
+			progressBadge,
+			pinIndicator)
 	}
 	fmt.Println()
 

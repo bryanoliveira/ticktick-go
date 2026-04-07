@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"ticktick-go/internal/cache"
 	"ticktick-go/internal/config"
 	"ticktick-go/internal/dateparse"
 )
@@ -40,6 +41,10 @@ type Task struct {
 	Items          []ChecklistItem `json:"items,omitempty"`
 	Kind           string          `json:"kind,omitempty"`
 	Progress       int             `json:"progress,omitempty"` // 0-100 for checklist tasks
+	SortOrder      int64           `json:"sortOrder,omitempty"`
+	// IsPinned is derived from SortOrder: TickTick does not expose a pin field
+	// in the open API, but pinned tasks are assigned a sortOrder <= -4611686018427387904 (math.MinInt64/2).
+	IsPinned       bool            `json:"isPinned,omitempty"`
 }
 
 type Reminder struct {
@@ -147,10 +152,39 @@ func (c *Client) GetProjectTasks(projectID string) ([]Task, error) {
 	return tasks, nil
 }
 
+// pinnedThreshold is the sortOrder value below which a task in a *named* project
+// is considered pinned. TickTick assigns extremely negative sortOrders to pinned tasks
+// (empirically around -6 to -8 × 10^18). Inbox tasks also use large negatives (~-4.6 × 10^18)
+// for their default ordering, so we exclude Inbox from pin detection.
+const pinnedThreshold int64 = -5_000_000_000_000_000_000 // -5 × 10^18
+
+// markPinned sets IsPinned on tasks based on their SortOrder.
+// Only non-Inbox tasks can be pinned.
+func markPinned(tasks []Task) {
+	for i := range tasks {
+		isInbox := strings.HasPrefix(tasks[i].ProjectID, "inbox")
+		tasks[i].IsPinned = !isInbox && tasks[i].SortOrder <= pinnedThreshold
+	}
+}
+
 // GetAllTasks returns all tasks across all projects, including the Inbox.
-// Uses /project/inbox/data for the Inbox (which is not returned by /project endpoint
-// as a regular project and would be silently skipped otherwise).
+// Results are cached for ~2 minutes to avoid redundant API calls when multiple
+// ttg commands run in quick succession (e.g. from a brief script).
+//
+// Pass forceRefresh=true to bypass the cache.
 func (c *Client) GetAllTasks() ([]Task, error) {
+	return c.GetAllTasksCached(false)
+}
+
+func (c *Client) GetAllTasksCached(forceRefresh bool) ([]Task, error) {
+	const cacheKey = "all_tasks"
+
+	if !forceRefresh {
+		if tasks, ok := cache.Get[[]Task](cacheKey); ok {
+			return tasks, nil
+		}
+	}
+
 	data, err := c.doRequest("GET", "/project", nil)
 	if err != nil {
 		return nil, err
@@ -194,6 +228,8 @@ func (c *Client) GetAllTasks() ([]Task, error) {
 		}
 	}
 
+	markPinned(allTasks)
+	cache.Set(cacheKey, allTasks) // best-effort; ignore error
 	return allTasks, nil
 }
 
@@ -210,6 +246,11 @@ func (c *Client) GetTask(projectID, taskID string) (*Task, error) {
 	}
 
 	return &task, nil
+}
+
+// InvalidateCache clears the local task cache, forcing the next read to hit the API.
+func (c *Client) InvalidateCache() {
+	cache.Invalidate("all_tasks")
 }
 
 // CreateTask creates a new task

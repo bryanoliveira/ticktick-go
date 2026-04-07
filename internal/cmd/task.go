@@ -21,10 +21,12 @@ func init() {
 	// List flags
 	taskListCmd.Flags().StringP("project", "p", "", "Filter by project name")
 	taskListCmd.Flags().Bool("all", false, "Show all tasks across all projects")
-	taskListCmd.Flags().String("due", "", "Filter by due date (today, overdue)")
-	taskListCmd.Flags().String("priority", "", "Filter by priority (high, medium, low)")
+	taskListCmd.Flags().String("due", "", "Filter by due date — comma-separated: today, overdue, tomorrow (e.g. --due today,overdue)")
+	taskListCmd.Flags().String("priority", "", "Filter by priority — comma-separated: high, medium, low, none (e.g. --priority high,medium)")
 	taskListCmd.Flags().String("tag", "", "Filter by tag")
 	taskListCmd.Flags().Bool("completed", false, "Show completed tasks")
+	taskListCmd.Flags().Bool("pinned", false, "Show only pinned tasks")
+	taskListCmd.Flags().Bool("no-cache", false, "Bypass cache and fetch fresh from API")
 	
 	// Add flags
 	taskAddCmd.Flags().StringP("project", "p", "inbox", "Project name")
@@ -76,12 +78,18 @@ var taskListCmd = &cobra.Command{
 		priorityFilter, _ := cmd.Flags().GetString("priority")
 		tagFilter, _ := cmd.Flags().GetString("tag")
 		showCompleted, _ := cmd.Flags().GetBool("completed")
+		showPinned, _ := cmd.Flags().GetBool("pinned")
+		noCache, _ := cmd.Flags().GetBool("no-cache")
 
 		var tasks []api.Task
 		var err error
 
-		if showAll || (dueFilter != "" && projectName == "") {
-			tasks, err = client.GetAllTasks()
+		// Any filter that needs all tasks (due filter, priority-only, pinned, --all)
+		// always goes through GetAllTasksCached to benefit from the 2-min cache.
+		needsAll := showAll || dueFilter != "" || (priorityFilter != "" && projectName == "") || showPinned
+
+		if needsAll {
+			tasks, err = client.GetAllTasksCached(noCache)
 		} else if projectName != "" {
 			projectID, err := client.GetProjectIDByName(projectName)
 			if err != nil {
@@ -98,16 +106,19 @@ var taskListCmd = &cobra.Command{
 
 		// Apply filters
 		if dueFilter != "" {
-			tasks = filterByDue(tasks, dueFilter)
+			tasks = filterByDueMulti(tasks, dueFilter)
 		}
 		if priorityFilter != "" {
-			tasks = filterByPriority(tasks, priorityFilter)
+			tasks = filterByPriorityMulti(tasks, priorityFilter)
 		}
 		if tagFilter != "" {
 			tasks = filterByTag(tasks, tagFilter)
 		}
 		if showCompleted {
 			tasks = filterCompleted(tasks)
+		}
+		if showPinned {
+			tasks = filterPinned(tasks)
 		}
 
 		if jsonFlag {
@@ -248,6 +259,7 @@ var taskAddCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		client.InvalidateCache()
 
 		if jsonFlag {
 			return format.OutputJSON(created)
@@ -340,6 +352,7 @@ var taskDoneCmd = &cobra.Command{
 		if err := client.CompleteTask(projectID, taskID); err != nil {
 			return err
 		}
+		client.InvalidateCache()
 
 		fmt.Println("✓ Task marked as complete!")
 		return nil
@@ -377,6 +390,7 @@ var taskDeleteCmd = &cobra.Command{
 		if err := client.DeleteTask(projectID, taskID); err != nil {
 			return err
 		}
+		client.InvalidateCache()
 
 		fmt.Println("✓ Task deleted!")
 		return nil
@@ -508,6 +522,7 @@ var taskEditCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		client.InvalidateCache()
 
 		fmt.Println("✓ Task updated!")
 		return nil
@@ -515,6 +530,24 @@ var taskEditCmd = &cobra.Command{
 }
 
 // Helper functions for filtering
+
+// filterByDueMulti supports comma-separated due values: today, overdue, tomorrow
+func filterByDueMulti(tasks []api.Task, filter string) []api.Task {
+	parts := strings.Split(filter, ",")
+	resultSet := make(map[string]api.Task)
+	for _, part := range parts {
+		for _, t := range filterByDue(tasks, strings.TrimSpace(part)) {
+			resultSet[t.ID] = t
+		}
+	}
+	var result []api.Task
+	for _, t := range resultSet {
+		result = append(result, t)
+	}
+	return result
+}
+
+// filterByDue filters tasks by a single due value: today, overdue, tomorrow
 func filterByDue(tasks []api.Task, filter string) []api.Task {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -555,11 +588,30 @@ func filterByDue(tasks []api.Task, filter string) []api.Task {
 	return filtered
 }
 
-func filterByPriority(tasks []api.Task, filter string) []api.Task {
-	filterPriority := api.ParsePriority(filter)
+// filterByPriorityMulti supports comma-separated priority values: high, medium, low, none
+func filterByPriorityMulti(tasks []api.Task, filter string) []api.Task {
+	parts := strings.Split(filter, ",")
+	wanted := make(map[int]bool)
+	for _, p := range parts {
+		wanted[api.ParsePriority(strings.TrimSpace(p))] = true
+	}
 	var filtered []api.Task
 	for _, t := range tasks {
-		if t.Priority == filterPriority {
+		if wanted[t.Priority] {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
+}
+
+func filterByPriority(tasks []api.Task, filter string) []api.Task {
+	return filterByPriorityMulti(tasks, filter)
+}
+
+func filterPinned(tasks []api.Task) []api.Task {
+	var filtered []api.Task
+	for _, t := range tasks {
+		if t.IsPinned {
 			filtered = append(filtered, t)
 		}
 	}
