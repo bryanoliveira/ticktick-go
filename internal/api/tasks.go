@@ -46,6 +46,26 @@ type Reminder struct {
 	Trigger string `json:"trigger"`
 }
 
+// UnmarshalJSON handles both string and object reminder formats.
+// Named project endpoint returns: [{"trigger": "TRIGGER:PT0S"}]
+// Inbox endpoint returns: ["TRIGGER:PT0S"]
+func (r *Reminder) UnmarshalJSON(data []byte) error {
+	// Try string first
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		r.Trigger = s
+		return nil
+	}
+	// Fall back to object
+	type reminderAlias Reminder
+	var alias reminderAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+	*r = Reminder(alias)
+	return nil
+}
+
 type TaskListResponse struct {
 	Tasks    []Task    `json:"tasks"`
 	Projects []Project `json:"projects"`
@@ -127,7 +147,9 @@ func (c *Client) GetProjectTasks(projectID string) ([]Task, error) {
 	return tasks, nil
 }
 
-// GetAllTasks returns all tasks across all projects
+// GetAllTasks returns all tasks across all projects, including the Inbox.
+// Uses /project/inbox/data for the Inbox (which is not returned by /project endpoint
+// as a regular project and would be silently skipped otherwise).
 func (c *Client) GetAllTasks() ([]Task, error) {
 	data, err := c.doRequest("GET", "/project", nil)
 	if err != nil {
@@ -140,12 +162,36 @@ func (c *Client) GetAllTasks() ([]Task, error) {
 	}
 
 	var allTasks []Task
+
+	// Fetch Inbox tasks first via the dedicated inbox endpoint.
+	// The Inbox project ID is "inbox" for the open API.
+	inboxData, inboxErr := c.doRequest("GET", "/project/inbox/data", nil)
+	if inboxErr == nil {
+		var resp struct {
+			Tasks []Task `json:"tasks"`
+		}
+		if json.Unmarshal(inboxData, &resp) == nil && len(resp.Tasks) > 0 {
+			allTasks = append(allTasks, resp.Tasks...)
+		}
+	}
+
+	// Collect task IDs already fetched to avoid duplicates.
+	seen := make(map[string]bool)
+	for _, t := range allTasks {
+		seen[t.ID] = true
+	}
+
 	for _, p := range projects {
 		tasks, err := c.GetProjectTasks(p.ID)
 		if err != nil {
 			continue
 		}
-		allTasks = append(allTasks, tasks...)
+		for _, t := range tasks {
+			if !seen[t.ID] {
+				seen[t.ID] = true
+				allTasks = append(allTasks, t)
+			}
+		}
 	}
 
 	return allTasks, nil

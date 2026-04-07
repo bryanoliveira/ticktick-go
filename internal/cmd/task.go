@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"ticktick-go/internal/api"
@@ -515,20 +516,38 @@ var taskEditCmd = &cobra.Command{
 
 // Helper functions for filtering
 func filterByDue(tasks []api.Task, filter string) []api.Task {
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	todayEnd := todayStart.Add(24 * time.Hour)
+
 	var filtered []api.Task
 	for _, t := range tasks {
-		dueStr := api.FormatDueDate(t.DueDate)
+		// Skip completed tasks
+		if t.Status == 2 {
+			continue
+		}
+
+		due := api.ToLocalTime(t.DueDate)
+		start := api.ToLocalTime(t.StartDate)
+
 		switch filter {
 		case "today":
-			if dueStr == "today" {
+			// Include if dueDate is today
+			duedToday := !due.IsZero() && !due.Before(todayStart) && due.Before(todayEnd)
+			// Include if startDate <= today (started, regardless of dueDate)
+			// but only if not overdue (due < today) — overdue tasks have their own filter
+			startedByToday := !start.IsZero() && start.Before(todayEnd) && (due.IsZero() || !due.Before(todayStart))
+			if duedToday || startedByToday {
 				filtered = append(filtered, t)
 			}
 		case "overdue":
-			if dueStr == "overdue" {
+			if !due.IsZero() && due.Before(todayStart) {
 				filtered = append(filtered, t)
 			}
 		case "tomorrow":
-			if dueStr == "tomorrow" {
+			tomorrowStart := todayEnd
+			tomorrowEnd := tomorrowStart.Add(24 * time.Hour)
+			if !due.IsZero() && !due.Before(tomorrowStart) && due.Before(tomorrowEnd) {
 				filtered = append(filtered, t)
 			}
 		}
