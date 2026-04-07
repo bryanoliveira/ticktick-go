@@ -25,7 +25,6 @@ func init() {
 	taskListCmd.Flags().String("priority", "", "Filter by priority — comma-separated: high, medium, low, none (e.g. --priority high,medium)")
 	taskListCmd.Flags().String("tag", "", "Filter by tag")
 	taskListCmd.Flags().Bool("completed", false, "Show completed tasks")
-	taskListCmd.Flags().Bool("pinned", false, "Show only pinned tasks")
 	taskListCmd.Flags().Bool("no-cache", false, "Bypass cache and fetch fresh from API")
 	
 	// Add flags
@@ -78,15 +77,14 @@ var taskListCmd = &cobra.Command{
 		priorityFilter, _ := cmd.Flags().GetString("priority")
 		tagFilter, _ := cmd.Flags().GetString("tag")
 		showCompleted, _ := cmd.Flags().GetBool("completed")
-		showPinned, _ := cmd.Flags().GetBool("pinned")
 		noCache, _ := cmd.Flags().GetBool("no-cache")
 
 		var tasks []api.Task
 		var err error
 
-		// Any filter that needs all tasks (due filter, priority-only, pinned, --all)
+		// Any filter that needs all tasks (due filter, priority-only, --all)
 		// always goes through GetAllTasksCached to benefit from the 2-min cache.
-		needsAll := showAll || dueFilter != "" || (priorityFilter != "" && projectName == "") || showPinned
+		needsAll := showAll || dueFilter != "" || (priorityFilter != "" && projectName == "")
 
 		if needsAll {
 			tasks, err = client.GetAllTasksCached(noCache)
@@ -116,9 +114,6 @@ var taskListCmd = &cobra.Command{
 		}
 		if showCompleted {
 			tasks = filterCompleted(tasks)
-		}
-		if showPinned {
-			tasks = filterPinned(tasks)
 		}
 
 		if jsonFlag {
@@ -608,15 +603,6 @@ func filterByPriority(tasks []api.Task, filter string) []api.Task {
 	return filterByPriorityMulti(tasks, filter)
 }
 
-func filterPinned(tasks []api.Task) []api.Task {
-	var filtered []api.Task
-	for _, t := range tasks {
-		if t.IsPinned {
-			filtered = append(filtered, t)
-		}
-	}
-	return filtered
-}
 
 func filterByTag(tasks []api.Task, filter string) []api.Task {
 	var filtered []api.Task

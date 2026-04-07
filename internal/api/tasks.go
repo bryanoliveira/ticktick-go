@@ -42,9 +42,6 @@ type Task struct {
 	Kind           string          `json:"kind,omitempty"`
 	Progress       int             `json:"progress,omitempty"` // 0-100 for checklist tasks
 	SortOrder      int64           `json:"sortOrder,omitempty"`
-	// IsPinned is derived from SortOrder: TickTick does not expose a pin field
-	// in the open API, but pinned tasks are assigned a sortOrder <= -4611686018427387904 (math.MinInt64/2).
-	IsPinned       bool            `json:"isPinned,omitempty"`
 }
 
 type Reminder struct {
@@ -152,20 +149,10 @@ func (c *Client) GetProjectTasks(projectID string) ([]Task, error) {
 	return tasks, nil
 }
 
-// pinnedThreshold is the sortOrder value below which a task in a *named* project
-// is considered pinned. TickTick assigns extremely negative sortOrders to pinned tasks
-// (empirically around -6 to -8 × 10^18). Inbox tasks also use large negatives (~-4.6 × 10^18)
-// for their default ordering, so we exclude Inbox from pin detection.
-const pinnedThreshold int64 = -5_000_000_000_000_000_000 // -5 × 10^18
-
-// markPinned sets IsPinned on tasks based on their SortOrder.
-// Only non-Inbox tasks can be pinned.
-func markPinned(tasks []Task) {
-	for i := range tasks {
-		isInbox := strings.HasPrefix(tasks[i].ProjectID, "inbox")
-		tasks[i].IsPinned = !isInbox && tasks[i].SortOrder <= pinnedThreshold
-	}
-}
+// markPinned is intentionally a no-op. TickTick's open API does not expose a
+// reliable pin flag — sortOrder heuristics produced false positives. Kept as a
+// hook for a future fix if the API exposes pin state directly.
+func markPinned(_ []Task) {}
 
 // GetAllTasks returns all tasks across all projects, including the Inbox.
 // Results are cached for ~2 minutes to avoid redundant API calls when multiple
